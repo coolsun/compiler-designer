@@ -1,0 +1,6 @@
+// $Id: 01-hello.oc,v 1.1 2019-04-16 12:14:45-07 - - $
+// Simple hello world program.
+
+int main() {
+}
+
