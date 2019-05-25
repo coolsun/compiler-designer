@@ -19,12 +19,18 @@ astree::astree(astree* that) {
   lloc = that->lloc;
   lexinfo = that->lexinfo;
   // vector defaults to empty -- no children
+  block_nr = 0;
+  attributes = *(new attr_bitset());
+  symbol_item = nullptr;
 }
 astree::astree(int symbol_, const location& lloc_, const char* info) {
   symbol = symbol_;
   lloc = lloc_;
   lexinfo = string_set::intern(info);
   // vector defaults to empty -- no children
+  block_nr = 0;
+  attributes = *(new attr_bitset());
+  symbol_item = nullptr;
 }
 
 astree::~astree() {
@@ -48,6 +54,21 @@ astree* astree::adopt(astree* child1, astree* child2,
     children.push_back(child2);
   if (child3 != nullptr)
     children.push_back(child3);
+  return this;
+}
+//ssun
+astree* astree::adopt_children(astree* that) {
+  if (that != nullptr) {
+    vector<astree*> thatChildren;
+    while (that->children.size() > 0) {
+      thatChildren.push_back(that->children.back());
+      that->children.pop_back();
+    }
+    while (thatChildren.size() != 0) {
+      children.push_back(thatChildren.back());
+      thatChildren.pop_back();
+    }
+  }
   return this;
 }
 
@@ -99,6 +120,37 @@ void astree::dump(FILE* outfile, astree* tree) {
     tree->dump_node(outfile);
 }
 
+// look up attr string
+const string attr_to_string(size_t attri) {
+  attr attribute = static_cast<attr>(attri);
+  static const unordered_map<attr, string> hash {
+      { attr::VOID, "void" }, 
+      { attr::INT, "int" }, 
+      { attr::NULLPTR_T, "null" },
+      { attr::STRING, "string" }, 
+      { attr::STRUCT, "struct" },
+      { attr::ARRAY, "array" }, 
+      { attr::FUNCTION, "function" }, 
+      { attr::VARIABLE, "variable" }, 
+      { attr::FIELD, "field" }, 
+      { attr::TYPE_ID, "type_id" },
+      { attr::PARAM, "param" },
+      { attr::LOCAL, "local" }, 
+      { attr::LVAL, "lval" },
+      { attr::CONST, "const" }, 
+      { attr::VREG, "vreg" }, 
+      { attr::VADDR, "vaddr" }, 
+      { attr::BITSET_SIZE, "bitset_size" }, 
+  };
+  auto str = hash.find(attribute);
+  if (str == hash.end()) {
+    throw invalid_argument(
+        string(__PRETTY_FUNCTION__) + ": "
+            + to_string(unsigned(attribute)));
+  }
+  return str->second;
+}
+
 void astree::print(FILE* outfile, astree* tree, int depth) {
 
   // ssun24
@@ -111,9 +163,38 @@ void astree::print(FILE* outfile, astree* tree, int depth) {
   const char *tname = parser::get_tname(tree->symbol);
   if (strstr(tname, "TOK_") == tname)
     tname += 4;
-  fprintf(outfile, "%s \"%s\" (%zd.%zd.%zd)\n", tname,
+  fprintf(outfile, "%s \"%s\" (%zd.%zd.%zd) {%zd}", tname,
       tree->lexinfo->c_str(), tree->lloc.filenr, tree->lloc.linenr,
-      tree->lloc.offset);
+      tree->lloc.offset, tree->block_nr);
+
+  // asgn4 
+  for (size_t i = 0; i < static_cast<size_t>(attr::BITSET_SIZE);
+      ++i) {
+    if (tree->attributes.test(i)) {
+      const char* s = attr_to_string(i).c_str();
+
+      if (!strcmp(s, "type_id"))
+        continue;
+
+      fprintf(outfile, " %s", attr_to_string(i).c_str());
+
+      if (!strcmp(s, "struct")) {
+        if (tree->symbol_item == nullptr) {
+          //     cout << *(tree->lexinfo) << endl;
+        } else
+          fprintf(outfile, " \"%s\"",
+              tree->symbol_item->type_name.c_str());
+      }
+    }
+  }
+  if (tree->symbol_item != nullptr) {
+    fprintf(outfile, " (%zd.%zd.%zd)", 
+        tree->symbol_item->lloc.filenr,
+        tree->symbol_item->lloc.linenr,
+        tree->symbol_item->lloc.offset);
+  }
+  fprintf(outfile, "\n");
+
   for (astree* child : tree->children) {
     astree::print(outfile, child, depth + 1);
   }
@@ -169,10 +250,8 @@ void errllocprintf(const location& lloc, const char* format,
   static char buffer[0x1000];
   assert(sizeof buffer > strlen(format) + strlen(arg));
   snprintf(buffer, sizeof buffer, format, arg);
-  errprintf("%s:%zd.%zd: %s", lexer::filename(lloc.filenr),
+  // asgn4 error fix
+  errprintf("%s:%zd.%zd: %s", (*lexer::filename(lloc.filenr)).c_str(),
       lloc.linenr, lloc.offset, buffer);
 }
-/* ssun24
- astree* new_parseroot() {
- return new astree (ROOT, {0, 0, 0}, "<<ROOT>>");
- */
+

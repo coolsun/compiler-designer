@@ -9,11 +9,15 @@ using namespace std;
 
 #include "auxlib.h"
 
+
+
 struct location {
   size_t filenr;
   size_t linenr;
   size_t offset;
 };
+
+#include "symbol.h"
 
 struct astree {
 
@@ -22,6 +26,9 @@ struct astree {
   location lloc;            // source location
   const string* lexinfo;    // pointer to lexical information
   vector<astree*> children; // children of this n-way node
+  size_t block_nr;
+  attr_bitset attributes;
+  symbol_node* symbol_item;
 
   // Functions.
   astree(astree* that);
@@ -31,6 +38,7 @@ struct astree {
       astree* child3 = nullptr);
   astree* promote (astree* child);
   astree* adopt_sym(astree* child, int symbol);
+  astree* adopt_children(astree* that);
   void update (int token, const char* info = nullptr);
   astree* copySelfToChild(const char* info = nullptr);
   void dump_node(FILE*);
@@ -39,8 +47,7 @@ struct astree {
   static void print(FILE* outfile, astree* tree, int depth = 0);
 };
 
-// ssun24 add start program
-//extern astree* yyparse_astree;
+
 astree* change_sym(astree* root, int symbol);
 
 void destroy(astree* tree1, astree* tree2 = nullptr,

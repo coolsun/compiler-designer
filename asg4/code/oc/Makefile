@@ -11,9 +11,9 @@ MKDEPS    = g++ -std=gnu++17 -MM
 GRIND     = valgrind --leak-check=full --show-reachable=yes
 UTILBIN   = /afs/cats.ucsc.edu/courses/cmps104a-wm/bin/
 
-MODULES   = astree lyutils string_set auxlib
+MODULES   = astree lyutils string_set auxlib symbol debug util
 HDRSRC    = ${MODULES:=.h}
-CPPSRC    = ${MODULES:=.cpp} oc.cpp debug.cpp util.cpp 
+CPPSRC    = ${MODULES:=.cpp} oc.cpp
 FLEXSRC   = scanner.l
 BISONSRC  = parser.y
 PARSEHDR  = yyparse.h
@@ -29,7 +29,7 @@ PARSEOUT  = yyparse.output
 REPORTS   = ${LEXOUT} ${PARSEOUT}
 MODSRC    = ${foreach MOD, ${MODULES}, ${MOD}.h ${MOD}.cpp}
 MISCSRC   = ${filter-out ${MODSRC}, ${HDRSRC} ${CPPSRC}}
-ALLSRC    = README ${FLEXSRC} ${BISONSRC} ${MODSRC} ${MISCSRC} Makefile
+ALLSRC    = README.txt ${FLEXSRC} ${BISONSRC} ${MODSRC} ${MISCSRC} Makefile
 TESTINS   = ${wildcard test*.in}
 EXECTEST  = ${EXECBIN} -ly
 LISTSRC   = ${ALLSRC} ${DEPSFILE} ${PARSEHDR}

@@ -18,6 +18,9 @@
 //from 08
 %destructor { destroy($$); } <>
 %printer { astree::dump (yyoutput, $$); } <>
+%initial-action {
+   parser::root = new astree (TOK_ROOT, {0, 0, 0}, "");
+}
 
 %token TOK_VOID TOK_INT TOK_STRING
 %token TOK_IF TOK_ELSE TOK_WHILE TOK_RETURN TOK_STRUCT
@@ -30,9 +33,6 @@
 %token TOK_PARAM TOK_TYPE_ID TOK_VARDECL TOK_FUNCTION
 %token TOK_INDEX
 
-%initial-action {
-   parser::root = new astree (TOK_ROOT, {0, 0, 0}, "");
-}
 
 %right  TOK_IF TOK_ELSE
 %right  '='
@@ -53,22 +53,25 @@
 start   : program               { $$ = $1 = nullptr; }
         ;
 
-program : program structdef    { $$ = $1->adopt($2);  }
-        | program vardecl    { $$ = $1->adopt($2);  }
-        | program function    { $$ = $1->adopt($2);  }
+program : program structdef     { $$ = $1->adopt($2);  }
+        | program vardecl       { $$ = $1->adopt($2);  }
+        | program function      { $$ = $1->adopt($2);  }
         | program error ';'     { destroy($3); $$ = $1; }
         | program ';'           { destroy($2); $$ = $1; }
         |                       { $$ = parser::root; }
         ;
-structdef : TOK_STRUCT TOK_IDENT '{' structdecls  '}' ';'
-                                { destroy($3, $5, $6);
-                                  $$ = $1->adopt($2, $4); }
+structdef : TOK_STRUCT TOK_IDENT structdecls  '}' ';'
+                                { destroy($4, $5);
+                                  $$ = $1->adopt($2); 
+                                  $$->adopt_children($3);
+                                  destroy($3);}
           | TOK_STRUCT TOK_IDENT '{' '}' ';' 
                                 { destroy($3, $4, $5);
                                   $$ = $1->adopt($2); }
           ;
-type  : plaintype        { $1->copySelfToChild(""); 
-                           $1->update(TOK_TYPE_ID); }
+type  : plaintype        { $$=new astree($1);
+                           $$->update(TOK_TYPE_ID, ""); 
+                           $$->adopt($1);}
       | TOK_ARRAY '<' plaintype '>' 
                          { destroy($2, $4);
                            $$ = $1->adopt($3); }
@@ -79,22 +82,23 @@ plaintype: TOK_VOID        { $$ = $1; }
                            { destroy($2, $3, $5);
                              $$ = $1->adopt($4); }
                    
-function: identdecl '(' identdecls ')' block 
-                                { $4->update(TOK_FUNCTION, "");
-                                  $2->update(TOK_PARAM);
-                                  $2->adopt($3);
-                                  $$ = $4->adopt($1, $2, $5); }
-        | identdecl '(' ')' block   { $3->update(TOK_FUNCTION, "");
-                                      $2->update(TOK_PARAM);
-                                      $$ = $3->adopt($1, $2, $4); }
-      ;
+function: identdecl params block { $$=new astree($1);
+                                   $$->update(TOK_FUNCTION, "");
+                                   $$->adopt($1, $2, $3); }
+        ;
+params  : identdecls ')'        { destroy($2);
+                                  $1->update(TOK_PARAM);
+                                  $$ = $1; }
+        | '(' ')'               { destroy($2); $1->update(TOK_PARAM);
+                                  $$ = $1; }
+        ;
 identdecls  : identdecls ',' identdecl  { destroy($2); 
                                           $$=$1->adopt($3); }
-            | identdecl                 { $$ = $1; }
+            | '(' identdecl             { $$ = $1->adopt($2); }
             ;
 identdecl   : type TOK_IDENT            { $$=$1->adopt($2); }
 structdecls : structdecls structdecl    { $$=$1->adopt($2); }
-            | structdecl                { $$ = $1; }
+            | '{' structdecl            { $$ = $1->adopt($2); }
             ;
 structdecl  : type TOK_IDENT ';'        { destroy($3); 
                                           $$=$1->adopt($2); }
@@ -126,13 +130,15 @@ vardecl : identdecl '=' expr ';'    { destroy($4);
 while   : TOK_WHILE '(' expr ')' stmt 
                                    { destroy($2, $4);
                                      $$ = $1->adopt($3, $5); }
-ifelse  : TOK_IF '(' expr ')' stmt TOK_ELSE stmt 
+ifelse  : TOK_IF '(' expr ')' stmt %prec TOK_IF
+								   { destroy($2, $4);
+                                     $$ = $1->adopt($3, $5); 
+                                   }
+        | TOK_IF '(' expr ')' stmt TOK_ELSE stmt 
                                    { destroy($2, $4, $6);
                                      $$ = $1->adopt($3, $5, $7); 
                                    }
-        | TOK_IF '(' expr ')' stmt { destroy($2, $4);
-                                     $$ = $1->adopt($3, $5); 
-                                   }
+        
 return  : TOK_RETURN expr ';'   { destroy($3); 
                                   $$ = $1-> adopt($2); }
         | TOK_RETURN ';'        { destroy($2); $$ = $1; }
@@ -170,11 +176,11 @@ allocator : TOK_ALLOC '<' TOK_STRING '>' '(' expr ')'
                 { destroy($2, $4, $6, $7, $8, $10);
                   $3->adopt($5);
                   $$ = $1->adopt($3, $9); }  
-call     : TOK_IDENT '(' exprs ')' { destroy($2); 
-                     $1->copySelfToChild("("); 
-                     $1->update(TOK_CALL);
-                     $$ = $1->adopt($3); }
-         | TOK_IDENT '(' ')'       { destroy($2, $3); $$ = $1; }
+call     : TOK_IDENT call_params { $$ = new astree($1);
+                                   $$->update(TOK_CALL, "(");
+		        	   $1->adopt_children($2); 
+                                   $$->adopt($1); 
+                                   destroy($2);}
          ;
 variable : TOK_IDENT               { $$ = $1; }
          | expr '[' expr  ']'      { destroy($4); 
@@ -183,10 +189,15 @@ variable : TOK_IDENT               { $$ = $1; }
          | expr TOK_PTR TOK_IDENT  
                                    { $$ = $2->adopt($1, $3); }
          ;
-                      
+call_params  : exprs ')'           { destroy($2);
+                                     $$ = $1; }
+             | '(' ')'             { destroy($2); 
+                                     $$ = $1; }
+             ;
+
 exprs    : exprs ',' expr   { destroy($2); 
                               $$ = $1->adopt($3); }
-         | expr             { $$ = $1; }
+         | '(' expr         { $$ = $1->adopt($2); }
                 
 constant : TOK_INTCON       { $$ = $1; }
          | TOK_CHARCON      { $$ = $1; }

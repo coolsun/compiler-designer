@@ -15,7 +15,7 @@ using namespace std;
 #include <wait.h>
 //#include "string_set.h"
 #include <iostream>
-#include "debug.h"
+//#include "debug.h"
 #include "unistd.h"
 
 #include "astree.h"
@@ -33,7 +33,6 @@ constexpr size_t LINESIZE = 1024;
 // refer to tokFile at lytuils.cpp
 extern FILE* tokFile;
 FILE* astFile;
-astree* yyparse_astree;
 
 // Chomp the last character from a buffer if it is delim.
 void chomp(char* string, char delim) {
@@ -45,13 +44,6 @@ void chomp(char* string, char delim) {
     *nlpos = '\0';
 }
 
-// Print the meaning of a signal.
-static void eprint_signal(const char* kind, int signal) {
-  fprintf(stderr, ", %s %d", kind, signal);
-  const char* sigstr = strsignal(signal);
-  if (sigstr != nullptr)
-    fprintf(stderr, " %s", sigstr);
-}
 
 // Print the status returned from a subprocess.
 /*
@@ -78,7 +70,7 @@ static void eprint_signal(const char* kind, int signal) {
  */
 
 // Run cpp against the lines of the file.
-void cpplines(FILE* pipe, const char* filename) {
+void cpplines(FILE* pipe) {
   int linenr = 1;
   for (;;) {
     char buffer[LINESIZE];
@@ -106,7 +98,7 @@ void cpplines(FILE* pipe, const char* filename) {
        printf ("token %d.%d: [%s]\n",
        linenr, tokenct, token);
        */
-      const string* str1 = string_set::intern(token);
+      // const string* str1 = string_set::intern(token);
       /*
        printf ("intern (\"%s\") returned %p->\"%s\"\n",
        token, (void*)str1, str1->c_str());
@@ -121,7 +113,8 @@ char *removeExt(char* mystr) {
   char *lastdot;
   if (mystr == NULL)
     return NULL;
-  if ((retstr = (char *) malloc(strlen(mystr) + 1)) == NULL)
+  if ((retstr = reinterpret_cast <char *> (malloc(strlen(mystr) + 1)))
+      == NULL)
     return NULL;
   strcpy(retstr, mystr);
   lastdot = strrchr(retstr, '.');
@@ -167,33 +160,6 @@ void scan_options(int argc, char** argv) {
   }
 }
 
-// Open a pipe from the C preprocessor.
-// Exit failure if can't.
-// Assigns opened pipe to FILE* yyin.
-/*
- void cpp_popen (const char* filename) {
- cpp_command = cpp_name + " " + filename;
- yyin = popen (cpp_command.c_str(), "r");
- if (yyin == nullptr) {
- syserrprintf (cpp_command.c_str());
- exit (exec::exit_status);
- }else {
- if (yy_flex_debug) {
- fprintf (stderr, "-- popen (%s), fileno(yyin) = %d\n",
- cpp_command.c_str(), fileno (yyin));
- }
- lexer::newfilename (cpp_command);
- }
- }
- */
-
-/*
- void cpp_pclose() {
- int pclose_rc = pclose (yyin);
- eprint_status (cpp_command.c_str(), pclose_rc);
- if (pclose_rc != 0) exec::exit_status = EXIT_FAILURE;
- }
- */
 
 FILE* open_file(char * path, string extension) {
 
@@ -224,10 +190,10 @@ int main(int argc, char** argv) {
     FILE* pipe = popen(cpp_command.c_str(), "r");
     if (pipe == nullptr) {
       exit_status = EXIT_FAILURE;
-      fprintf(stderr, "%s: %s: %s\n", exec::execname,
+      fprintf(stderr, "%s: %s: %s\n", exec::execname.c_str(),
           cpp_command.c_str(), strerror(errno));
     } else {
-      cpplines(pipe, filename);
+      cpplines(pipe);
       int pclose_rc = pclose(pipe);
       eprint_status(cpp_command.c_str(), pclose_rc);
       if (pclose_rc != 0)
@@ -240,28 +206,37 @@ int main(int argc, char** argv) {
     sprintf(file_str, "%s.str", removeExt(basename(filename)));
     FILE* pipe_out = fopen(file_str, "w");
     string_set::dump(pipe_out);
-    int poutclose_rc = fclose(pipe_out);
+    fclose(pipe_out);
 
     // asg2 & 3 .tok .ast
     tokFile = open_file(filename, ".tok");
     astFile = open_file(filename, ".ast");
 
 
+    FILE* symbolFile = open_file(filename, ".sym");
+
     yyin = popen(cpp_command.c_str(), "r");
     if (yyin == NULL) {
       syserrprintf(cpp_command.c_str());
     } else {
-      int yy_rtn = yyparse();
+      yyparse();
       int pclose_rc = pclose(yyin);
       eprint_status(cpp_command.c_str(), pclose_rc);
     }
-    fclose (tokFile);
+    fclose(tokFile);
+
+    // asgn4
+    // generate symbol file
+    symbol_generator* generator = new symbol_generator(symbolFile);
+    generator->generate(parser::root);
+
     astree::print(astFile, parser::root);
     //astree::dump(astFile, astree.);
-    fclose (astFile);
+    fclose(astFile);
+    fclose(symbolFile);
     delete(parser::root);
   }
-  return 0;
+  return exit_status;
 
 }
 

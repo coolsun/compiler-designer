@@ -9,9 +9,12 @@
 #include "auxlib.h"
 #include "lyutils.h"
 
+
+
 // ssun24
 // add tokFile to print include file ino
 FILE* tokFile;
+astree* yyparse_astree = nullptr;
 
 bool lexer::interactive = true;
 location lexer::lloc = { 0, 1, 0 };

@@ -22,6 +22,9 @@ extern int yy_flex_debug;
 extern int yydebug;
 extern int yyleng;
 
+// ssun24 add start program
+extern astree* yyparse_astree;
+
 bool is_defined_token (int symbol);
 const char* get_yytname (int symbol);
 
