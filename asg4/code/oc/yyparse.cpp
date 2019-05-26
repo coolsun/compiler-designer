@@ -2762,8 +2762,8 @@ yyreduce:
 #line 179 "parser.y" /* yacc.c:1646  */
     { (yyval) = new astree((yyvsp[-1]));
                                    (yyval)->update(TOK_CALL, "(");
-		        	   (yyvsp[-1])->adopt_children((yyvsp[0])); 
                                    (yyval)->adopt((yyvsp[-1])); 
+		        	   (yyval)->adopt_children((yyvsp[0])); 
                                    destroy((yyvsp[0]));}
 #line 2769 "yyparse.cpp" /* yacc.c:1646  */
     break;

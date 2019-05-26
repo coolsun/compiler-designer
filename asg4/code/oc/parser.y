@@ -178,8 +178,8 @@ allocator : TOK_ALLOC '<' TOK_STRING '>' '(' expr ')'
                   $$ = $1->adopt($3, $9); }  
 call     : TOK_IDENT call_params { $$ = new astree($1);
                                    $$->update(TOK_CALL, "(");
-		        	   $1->adopt_children($2); 
                                    $$->adopt($1); 
+		        	   $$->adopt_children($2); 
                                    destroy($2);}
          ;
 variable : TOK_IDENT               { $$ = $1; }
